@@ -1,0 +1,11 @@
+.venv/
+data/
+warehouse.duckdb*
+target/
+dbt_packages/
+logs/
+*:Zone.Identifier
+.pytest_cache/
+__pycache__/
+.user.yml
+.superpowers/
