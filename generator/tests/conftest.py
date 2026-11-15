@@ -12,3 +12,9 @@ def small_cfg():
 @pytest.fixture
 def rng(small_cfg):
     return np.random.default_rng(small_cfg.seed)
+
+
+@pytest.fixture
+def faker(small_cfg):
+    from ledgerly.customers import make_faker
+    return make_faker(small_cfg.seed)
