@@ -1,0 +1,39 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install dependencies and dbt packages
+        run: make setup
+
+      - name: Generate synthetic data
+        run: make generate
+
+      - name: dbt debug
+        run: make debug
+
+      - name: dbt parse
+        run: uv run dbt parse
+        env:
+          DBT_PROFILES_DIR: ${{ github.workspace }}
+
+      - name: Python tests
+        run: make test
+
+      - name: Lint SQL (non-blocking until models exist)
+        run: make lint
+        continue-on-error: true
