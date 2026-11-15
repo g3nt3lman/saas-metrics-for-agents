@@ -39,7 +39,7 @@ def build_customer_month_facts(cfg: Config, customers: pd.DataFrame, lifecycle: 
         for month in _months(cfg):
             at = ts(add_months(month, 1))  # month end = instant just before the next month starts
             if s["started_at"] >= at:
-                break
+                continue  # month ends before the subscription starts
             ended = pd.notna(s["ended_at"]) and s["ended_at"] < at
             if ended and s["ended_at"] < ts(month):
                 break

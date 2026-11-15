@@ -110,3 +110,11 @@ def test_truth_discount_matches_coupon(world):
     d = f[f.discount_mrr_local > 0]
     assert len(d) > 0
     assert (d.discount_mrr_local <= d.run_rate_mrr_local_list * 0.2 + 1e-3).all()
+
+
+def test_truth_covers_every_subscription_through_window(world):
+    cfg, _, lc, _, facts, _ = world
+    assert set(facts.subscription_id) == set(lc.subscriptions.id)
+    live = lc.subscriptions[lc.subscriptions.ended_at.isna()]
+    last = facts[facts.month == cfg.end.replace(day=1)]
+    assert set(live.id) <= set(last.subscription_id)
