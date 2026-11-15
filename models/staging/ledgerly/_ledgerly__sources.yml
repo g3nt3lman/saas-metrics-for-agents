@@ -1,0 +1,39 @@
+version: 2
+
+sources:
+  - name: ledgerly
+    description: >
+      Raw Stripe-like billing export of Ledgerly, produced by the synthetic generator
+      (`make generate`) as Parquet files in data/raw/. See generator/README.md for the
+      deliberate data-quality issues in each table.
+    config:
+      meta:
+        external_location: "data/raw/{name}.parquet"
+    tables:
+      - name: customers
+        description: One row per customer. Includes internal test accounts (@ledgerly.io) and soft-deleted rows.
+      - name: plans
+        description: One row per price version (Stripe price semantics); a price change creates a new plan_id.
+      - name: subscriptions
+        description: One row per subscription; a reactivated customer gets a new subscription.
+      - name: subscription_items
+        description: One row per item version (plan/seat state) with valid_from / valid_to.
+      - name: invoices
+        description: One row per invoice in local currency; total equals the sum of its line items.
+      - name: invoice_line_items
+        description: Invoice lines typed subscription / proration / one_off / discount; signed amounts.
+      - name: payments
+        description: One row per payment attempt; attempted_at is an ISO-8601 string with mixed UTC offsets.
+      - name: refunds
+        description: Partial and full refunds of successful payments, sometimes in a later month.
+      - name: fx_rates
+        description: Daily rate_to_eur per currency on business days only (no weekend rates).
+      - name: events
+        description: >
+          Webhook event deliveries. Event ids repeat on re-delivery; ingested_at can lag
+          created_at by weeks (late-arriving data).
+        config:
+          loaded_at_field: ingested_at
+          freshness:
+            warn_after: {count: 2, period: day}
+            error_after: {count: 7, period: day}
