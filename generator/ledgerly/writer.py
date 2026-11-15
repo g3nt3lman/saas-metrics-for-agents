@@ -85,8 +85,19 @@ def apply_as_of(tables: dict[str, pd.DataFrame], as_of: date) -> dict[str, pd.Da
         f = t["truth/customer_month_facts"]
         keep = [add_months(m, 1) <= as_of + timedelta(days=1) for m in f.month]
         f = f[keep]
-        f = f[f.subscription_id.isin(set(subs.id))]
+        f = f[f.subscription_id.isin(set(subs.id))].copy()
+        f["is_deleted"] = f.customer_id.map(cust.set_index("id").is_deleted).astype(bool)
         t["truth/customer_month_facts"] = f.reset_index(drop=True)
+    if "truth/mess_log" in t:
+        log = t["truth/mess_log"]
+        survivors = {name: set(t[name].id) for name in ("customers", "subscriptions", "subscription_items",
+                                                         "payments", "refunds", "events")}
+        survivors["plans"] = set(t["plans"].plan_id)
+        # fx_gaps points at dates that are missing by design: keep those up to as-of
+        survivors["fx_rates"] = {(as_of - timedelta(days=i)).isoformat()
+                                 for i in range((as_of - min(t["fx_rates"].date)).days + 1)}
+        keep = [oid in survivors.get(tbl, set()) for tbl, oid in zip(log.table, log.object_id)]
+        t["truth/mess_log"] = log[keep].reset_index(drop=True)
     return t
 
 

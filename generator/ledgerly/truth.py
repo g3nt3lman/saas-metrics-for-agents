@@ -64,15 +64,18 @@ def build_customer_month_facts(cfg: Config, customers: pd.DataFrame, lifecycle: 
                             state = "past_due"
             pl = plan.loc[item.plan_id]
             run_rate = round(pl.unit_amount * item.quantity / (12 if pl.interval == "year" else 1), 4)
-            coupon = 0.0
+            # coupon run-rate = the covering invoice's discount line spread over its period's months
+            discount = 0.0
             for p in periods:
                 if p.kind == "regular" and p.coupon_pct and ts(p.period_start) < at <= ts(p.period_end):
-                    coupon = p.coupon_pct
+                    subtotal = sum(round(plan.at[pid, "unit_amount"] * q, 2) for pid, q in p.items)
+                    months = 12 if pl.interval == "year" else 1
+                    discount = round(round(subtotal * p.coupon_pct, 2) / months, 4)
             rows.append({
                 "customer_id": s["customer_id"], "month": month, "state_at_month_end": state,
                 "subscription_id": s["id"], "plan_id": item.plan_id, "tier": pl.tier, "interval": pl.interval,
                 "currency": pl.currency, "quantity": int(item.quantity), "run_rate_mrr_local_list": run_rate,
-                "discount_mrr_local": round(run_rate * coupon, 4) if state != "ended" else 0.0,
+                "discount_mrr_local": discount if state != "ended" else 0.0,
                 "is_internal": bool(cust.at[s["customer_id"], "_kind"] == "internal"),
                 "is_deleted": s["customer_id"] in deleted,
             })

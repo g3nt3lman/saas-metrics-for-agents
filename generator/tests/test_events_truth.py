@@ -109,7 +109,8 @@ def test_truth_discount_matches_coupon(world):
     f = world[4]
     d = f[f.discount_mrr_local > 0]
     assert len(d) > 0
-    assert (d.discount_mrr_local <= d.run_rate_mrr_local_list * 0.2 + 1e-3).all()
+    log = world[5].to_frame()
+    assert set(d.subscription_id) <= set(log[log.mess_type == "discounts"].object_id)
 
 
 def test_truth_covers_every_subscription_through_window(world):

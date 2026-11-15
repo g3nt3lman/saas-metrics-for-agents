@@ -113,19 +113,25 @@ def build_billing(cfg: Config, rng: np.random.Generator, lifecycle: Lifecycle, p
 
 
 def _inject_boundary_cases(cfg: Config, rng: np.random.Generator, pay: pd.DataFrame, log: MessLog) -> None:
-    """Move a few PLN payments to 00:00-00:59 Warsaw time on the 1st of the next month.
+    """Move a few PLN payments made in the last two days of a month to 00:00-00:59 Warsaw time on the 1st.
 
     Their UTC time is the previous day (previous month); parsing the string naively shifts the month.
     """
     n = int(cfg.mess["timezone_trap"]["boundary_cases"])
     last_month = (cfg.end.year, cfg.end.month)
-    candidates = [i for i, row in pay.iterrows()
-                  if row.currency == "PLN" and row.status == "succeeded"
-                  and (row._attempted_at_utc.year, row._attempted_at_utc.month) < last_month]
+    attempts_per_invoice = pay.invoice_id.value_counts()
+    candidates = []
+    for i, row in pay.iterrows():
+        if row.currency != "PLN" or row.status != "succeeded" or attempts_per_invoice[row.invoice_id] != 1:
+            continue
+        local = row._attempted_at_utc.tz_convert(WARSAW)
+        days_in_month = (add_months(date(local.year, local.month, 1), 1) - timedelta(days=1)).day
+        if local.day >= days_in_month - 1 and (local.year, local.month) < last_month:
+            candidates.append(i)
     if not candidates:
         return
     for i in rng.choice(candidates, size=min(n, len(candidates)), replace=False):
-        t = pay.at[i, "_attempted_at_utc"]
+        t = pay.at[i, "_attempted_at_utc"].tz_convert(WARSAW)
         first = add_months(date(t.year, t.month, 1), 1)
         local = pd.Timestamp(first.year, first.month, 1, 0, int(rng.integers(0, 60)), tz=WARSAW)
         utc = local.tz_convert("UTC")

@@ -51,7 +51,10 @@ def build_world(cfg: Config) -> dict[str, pd.DataFrame]:
 
 def generate(cfg: Config, as_of: date | None = None) -> dict[str, pd.DataFrame]:
     """The dataset as the source system shows it at ``as_of`` (default: end of window), private columns removed."""
-    world = apply_as_of(build_world(cfg), as_of or cfg.end)
+    as_of = as_of or cfg.end
+    if not cfg.start <= as_of <= cfg.end:
+        raise ValueError(f"--as-of {as_of} is outside the simulated window {cfg.start}..{cfg.end}")
+    world = apply_as_of(build_world(cfg), as_of)
     return {k: strip_private(v).reset_index(drop=True) for k, v in world.items()}
 
 

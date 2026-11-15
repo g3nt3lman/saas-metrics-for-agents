@@ -151,14 +151,14 @@ Excluding them rewrites history. Including them keeps historical MRR stable. Tha
 
 ### `timezone_trap` — `payments.attempted_at` as mixed-offset strings
 The column is a string. It ends in `Z` (UTC) for most customers. For PLN customers it carries Warsaw local time with
-an offset (`+01:00` in winter, `+02:00` in summer). Five payments sit at 00:00–00:59 local time on the 1st of a month.
+an offset (`+01:00` in winter, `+02:00` in summer). Five payments made in the last two days of a month were moved to 00:00–00:59 local time on the 1st of the next month.
 Their UTC time is the previous day, so the previous month. Parsing the string naively (dropping the offset) puts
 them in the wrong month.
 **Breaks:** monthly cash, at month boundaries.
 
 ## As-of exports
 
-`--as-of YYYY-MM-DD` emits the world as the source system showed it at the end of that day (UTC):
+`--as-of YYYY-MM-DD` (must fall inside the window) emits the world as the source system showed it at the end of that day (UTC):
 - rows created later are dropped;
 - `canceled_at` and `ended_at` in the future are null, and statuses are recomputed;
 - events not yet ingested are dropped;
@@ -187,7 +187,12 @@ It deliberately does **not** contain an "MRR" column. The churn, FX, discount, t
 soft-delete rules belong in `docs/metric_definitions.md`. Your reconciliation tests apply them on top of these facts and
 compare the result with `fct_mrr_monthly`.
 
-`mess_log.parquet` has one row per injected mess instance (`mess_type`, `table`, `object_id`, `note`).
+`mess_log.parquet` has one row per injected mess instance (`mess_type`, `table`, `object_id`, `note`). It is
+filtered to objects that exist in the export, so it respects as-of. The exception is `fx_gaps`, which points
+at dates that are missing by design.
+
+`discount_mrr_local` equals the covering invoice's `discount` line ÷ the months in its period, so net MRR can be
+reconciled from raw invoice lines.
 
 Do not expose `data/truth` to the agent. It exists to grade the models, not to answer questions.
 

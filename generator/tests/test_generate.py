@@ -114,3 +114,56 @@ def test_status_at_window_end_matches_lifecycle():
 
 def test_late_events_beyond_window_dropped(full):
     assert (full["events"].ingested_at < pd.Timestamp("2026-11-01", tz="UTC")).all()
+
+
+@pytest.fixture(scope="module")
+def mid():
+    return generate(load_config(n_customers=600), as_of=date(2025, 10, 31))
+
+
+def test_truth_discount_reconciles_with_invoice_discount_lines(full):
+    t = full
+    f = t["truth/customer_month_facts"]
+    f = f[(f.discount_mrr_local > 0)]
+    inv = t["invoices"]
+    lines = t["invoice_line_items"]
+    disc = lines[lines.type == "discount"].groupby("invoice_id").amount.sum().rename("disc")
+    inv = inv.join(disc, on="id").dropna(subset=["disc"])
+    inv["months"] = (pd.to_datetime(inv.period_end).dt.year * 12 + pd.to_datetime(inv.period_end).dt.month
+                     - pd.to_datetime(inv.period_start).dt.year * 12 - pd.to_datetime(inv.period_start).dt.month)
+    j = f.merge(inv[["subscription_id", "period_start", "period_end", "disc", "months"]], on="subscription_id")
+    month_end = pd.to_datetime(j.month) + pd.offsets.MonthBegin(1)
+    j = j[(pd.to_datetime(j.period_start) < month_end) & (month_end <= pd.to_datetime(j.period_end))]
+    assert len(j) == len(f)
+    assert ((-j.disc / j.months).round(2) == j.discount_mrr_local.round(2)).all()
+
+
+def test_truth_is_deleted_matches_raw_at_as_of(mid):
+    f = mid["truth/customer_month_facts"]
+    raw = mid["customers"].set_index("id").is_deleted
+    assert (f.is_deleted == f.customer_id.map(raw)).all()
+
+
+def test_mess_log_objects_exist_in_raw(full, mid):
+    for t, as_of in ((full, "2026-10-31"), (mid, "2025-10-31")):
+        log = t["truth/mess_log"]
+        for table, g in log.groupby("table"):
+            ids = {d.isoformat() for d in pd.date_range("2024-11-01", as_of).date} \
+                if table == "fx_rates" else set(
+                t[table].plan_id if table == "plans" else t[table].id)
+            assert set(g.object_id) <= ids, table
+
+
+def test_timezone_trap_payment_close_to_invoice(full):
+    t = full
+    ids = set(t["truth/mess_log"].query("mess_type == 'timezone_trap'").object_id)
+    p = t["payments"][t["payments"].id.isin(ids)].merge(
+        t["invoices"][["id", "created_at"]], left_on="invoice_id", right_on="id")
+    lag = pd.to_datetime(p.attempted_at, utc=True, format="ISO8601") - p.created_at
+    assert len(p) == 5 and (lag <= pd.Timedelta(days=3)).all() and (lag >= pd.Timedelta(0)).all()
+
+
+@pytest.mark.parametrize("as_of", [date(2024, 10, 31), date(2027, 3, 1)])
+def test_as_of_outside_window_rejected(as_of):
+    with pytest.raises(ValueError):
+        generate(load_config(n_customers=20), as_of=as_of)
