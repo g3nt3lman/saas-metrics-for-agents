@@ -1,0 +1,20 @@
+semantic_models:
+  - name: plans
+    description: Plan catalogue, one row per price version.
+    model: ref('dim_plans')
+
+    entities:
+      - name: plan         
+        type: primary
+        expr: plan_id       
+
+    dimensions:
+      - name: tier
+        type: categorical
+        description: starter, pro or business.
+      - name: billing_interval
+        type: categorical
+        description: month or year; annual MRR = price ÷ 12
+      - name: price_version
+        type: categorical
+        description: Price version of the plan, e.g. 2023-01-01, 2023-02-01, etc. Each price version has a different price and/or features.

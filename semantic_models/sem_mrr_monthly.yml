@@ -1,0 +1,110 @@
+semantic_models:
+  - name: mrr_monthly
+    description: >
+      Monthly recurring revenue (MRR) snapshot: one row per customer per month, measured at the end of the month, in EUR. 
+    model: ref('fct_mrr_monthly')
+    defaults:
+      agg_time_dimension: month_start     
+    entities:
+      - name: customer_month
+        type: primary
+        expr: customer_month_id   
+      - name: plan            
+        type: foreign
+        expr: plan_id
+      - name: customer            
+        type: foreign
+        expr: customer_id       
+
+    dimensions: 
+      - name: month_start
+        type: time
+        type_params:
+          time_granularity: month
+        description: First day of the month; values describe the state at the end of this month.
+      - name: subscription_state
+        type: categorical
+        description: State of the subscription. possible values (trialing, active, past_due, canceled_pending_end, ended)
+
+    measures:       
+      - name: mrr_eur
+        description: >
+          MRR is the recurring run-rate the customer is committed to, not what was invoiced. annual plans are divided by 12, prorations and one-off fees are excluded, coupons are deducted (net MRR), trials count as zero, and customers in dunning (past_due) still count until the subscription ends. Internal test accounts are excluded. Because it is a snapshot, MRR must never be summed across months; the MRR for a quarter or year is the MRR of its last month.
+        agg: sum
+        expr: mrr_eur                 
+        non_additive_dimension:
+          name: month_start
+          window_choice: max    
+      - name: mrr_gross_eur
+        description: Gross MRR in EUR, summed over customers.
+        agg: sum
+        expr: mrr_gross_eur             
+        non_additive_dimension:
+          name: month_start
+          window_choice: max    
+      - name: discount_eur
+        description: Coupon run-rate in EUR, summed over customers.
+        agg: sum
+        expr: discount_eur             
+        non_additive_dimension:
+          name: month_start
+          window_choice: max
+      - name: mrr_at_risk_eur
+        description: Part of mrr_eur from customers in dunning (past_due) at month end, summed over customers.
+        agg: sum
+        expr: mrr_at_risk_eur             
+        non_additive_dimension:
+          name: month_start
+          window_choice: max
+      - name: is_paying
+        description: True when the customer has MRR > 0 at month end. Active customers = count of paying customers.
+        agg: sum
+        expr: is_paying             
+        non_additive_dimension:
+          name: month_start
+          window_choice: max
+
+metrics:        
+      - name: mrr
+        label: MRR                
+        description: >
+          MRR is the recurring run-rate the customer is committed to, not what was invoiced. annual plans are divided by 12, prorations and one-off fees are excluded, coupons are deducted (net MRR), trials count as zero, and customers in dunning (past_due) still count until the subscription ends. Internal test accounts are excluded. Because it is a snapshot, MRR must never be summed across months; the MRR for a quarter or year is the MRR of its last month.
+        type: simple
+        type_params:
+          measure: mrr_eur
+      - name: mrr_gross
+        label: MRR gross
+        description: MRR in EUR at list price, before coupons.
+        type: simple
+        type_params:
+          measure: mrr_gross_eur
+      - name: discount_mrr
+        label: Discount
+        description: Coupon run-rate in EUR. mrr_gross_eur - discount_eur = mrr_eur.
+        type: simple
+        type_params:
+          measure: discount_eur
+      - name: mrr_at_risk
+        label: MRR at risk
+        description: Part of mrr_eur from customers in dunning (past_due) at month end.
+        type: simple
+        type_params:
+          measure: mrr_at_risk_eur
+      - name: active_customers
+        label: Active customers
+        description: >
+          Count of customers with MRR > 0 at month end. Snapshot: for a quarter or a year use its last month,
+          never sum across months.
+        type: simple
+        type_params:
+          measure: is_paying
+      - name: arr
+        label: ARR
+        description: >
+          Annual Recurring Revenue in EUR = MRR × 12, at month end. Same rules as mrr. Snapshot: for a quarter or a year use its last month, never sum across months
+        type: derived
+        type_params:
+          expr: mrr * 12
+          metrics:
+            - name: mrr
+

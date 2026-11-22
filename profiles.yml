@@ -5,3 +5,6 @@ ledgerly:
       type: duckdb
       path: "{{ env_var('DUCKDB_PATH', 'warehouse.duckdb') }}"
       threads: 4
+      settings:
+        # month boundaries are UTC; without this DuckDB truncates timestamptz in the machine's local zone
+        TimeZone: UTC

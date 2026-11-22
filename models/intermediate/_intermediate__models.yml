@@ -1,0 +1,47 @@
+version: 2
+
+models:
+  - name: int_months
+    description: One row per calendar month in the export window. month_end_at is exclusive (start of next month, UTC).
+    columns:
+      - name: month_start
+        data_tests: [unique, not_null]
+
+  - name: int_fx_rates_month_end
+    description: Rate to EUR per currency and month, from the last business day on or before the month end.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [month_start, currency]
+    columns:
+      - name: rate_to_eur
+        data_tests: [not_null]
+
+  - name: int_subscription_months
+    description: >
+      One row per subscription × month while it exists (including the month it ended), with its state at
+      month end and MRR in local currency per docs/metric_definitions.md. Reconciled row by row against
+      the generator's ground truth (tests/assert_subscription_months_match_truth.sql).
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [subscription_id, month_start]
+    columns:
+      - name: subscription_state
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [trialing, active, past_due, canceled_pending_end, ended]
+      - name: mrr_local
+        data_tests: [not_null]
+
+  - name: int_mrr_by_customer_month
+    description: One row per customer × month, MRR in local currency and EUR. Includes internal accounts (flagged).
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [customer_id, month_start]
+    columns:
+      - name: fx_rate_to_eur
+        description: Every month must have a rate; a null here means an FX gap leaked through.
+        data_tests: [not_null]

@@ -1,0 +1,35 @@
+semantic_models:
+  - name: customers
+    description: One row per customer, incl. soft-deleted; cohort_month = first paying month.
+    model: ref('dim_customers')
+
+    entities:
+      - name: customer  
+        type: primary
+        expr: customer_id     
+
+    dimensions:
+      - name: country_code
+        type: categorical
+        description: Country code of a client, e.g. DE, FR, NL, ES, IT, US, CA, GB, PL.
+      - name: currency
+        type: categorical
+        description: Currency of a client, e.g. USD, EUR, PLN.
+      - name: signup_month
+        type: time
+        type_params:
+          time_granularity: month
+        description: Month of signup.
+      - name: cohort_month
+        type: time
+        type_params:
+          time_granularity: month
+        description: Month of first paying subscription. Null if the customer never paid.
+      - name: has_ever_paid
+        type: categorical
+        description: True if the customer was ever paying at a month end. Use to exclude signups that never subscribed.       
+      - name: is_deleted
+        type: categorical
+        description: info if the customer is soft-deleted (flagged in the system, but still present in the database).
+      
+        

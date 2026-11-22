@@ -1,4 +1,6 @@
 [sqlfluff]
+# structure.column_order is off: dbt convention puts the renamed primary key first, even when it is computed
+exclude_rules = structure.column_order
 dialect = duckdb
 templater = dbt
 max_line_length = 120
@@ -18,3 +20,4 @@ extended_capitalisation_policy = lower
 
 [sqlfluff:rules:capitalisation.literals]
 capitalisation_policy = lower
+

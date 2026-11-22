@@ -1,0 +1,93 @@
+version: 2
+
+models:
+  - name: fct_mrr_monthly
+    description: >
+      Monthly Recurring Revenue snapshot: one row per customer per month, measured at the end of the month,
+      in EUR. MRR is the recurring run-rate the customer is committed to, not what was invoiced:
+      annual plans are divided by 12, prorations and one-off fees are excluded, coupons are deducted (net MRR),
+      trials count as zero, and customers in dunning (past_due) still count until the subscription ends.
+      Internal test accounts are excluded. Because it is a snapshot, MRR must never be summed across months;
+      the MRR for a quarter or year is the MRR of its last month. Definitions: docs/metric_definitions.md.
+    columns:
+      - name: customer_month_id
+        description: Surrogate key, customer_id + month.
+        data_tests: [unique, not_null]
+      - name: customer_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_customers')
+                field: customer_id
+      - name: plan_id
+        description: The plan (price version) live at month end.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_plans')
+                field: plan_id
+      - name: month_start
+        description: First day of the month; values describe the state at the end of this month.
+        data_tests: [not_null]
+      - name: currency
+        description: The customer's billing currency (EUR, USD or PLN).
+      - name: subscription_state
+        description: >
+          State at month end: trialing (no MRR), active, past_due (payment failed, dunning in progress, still
+          counts), canceled_pending_end (annual plan canceled, runs until term end, still counts), ended
+          (churned this month, no MRR).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [trialing, active, past_due, canceled_pending_end, ended]
+      - name: is_paying
+        description: True when the customer has MRR > 0 at month end. Active customers = count of paying customers.
+      - name: fx_rate_to_eur
+        description: Rate of the last business day on or before the month end.
+      - name: mrr_local
+        description: Net MRR in the customer's billing currency.
+      - name: mrr_eur
+        description: Net MRR in EUR (after coupons). This is the headline MRR.
+        data_tests: [not_null]
+      - name: mrr_gross_eur
+        description: MRR in EUR at list price, before coupons.
+      - name: discount_eur
+        description: Coupon run-rate in EUR. mrr_gross_eur - discount_eur = mrr_eur.
+      - name: mrr_at_risk_eur
+        description: Part of mrr_eur from customers in dunning (past_due) at month end.
+
+  - name: dim_customers
+    description: >
+      One row per customer, including internal test accounts and soft-deleted customers (both flagged).
+      cohort_month is the first month the customer was paying, over its whole history.
+    columns:
+      - name: customer_id
+        data_tests: [unique, not_null]
+      - name: country_code
+        description: ISO country code (DE, FR, NL, ES, IT, US, CA, GB, PL).
+      - name: currency
+        description: Billing currency, fixed by country. Null for signups that never subscribed.
+      - name: signup_month
+        description: Month the account was created.
+      - name: cohort_month
+        description: First month with MRR at month end. Null if the customer never paid.
+      - name: has_ever_paid
+      - name: is_internal
+        description: Ledgerly's own test account (@ledgerly.io). Excluded from every metric.
+      - name: is_deleted
+        description: Soft-deleted in the source system. Kept in metrics, because deleting an account does not undo its history.
+
+  - name: dim_plans
+    description: One row per plan (price version). A price change on 2025-11-01 created price_version 2; existing subscriptions kept version 1.
+    columns:
+      - name: plan_id
+        data_tests: [unique, not_null]
+      - name: tier
+        description: starter, pro or business.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [starter, pro, business]
+      - name: billing_interval
+        description: month or year. Annual plans are billed once a year; their MRR is the annual price ÷ 12.
