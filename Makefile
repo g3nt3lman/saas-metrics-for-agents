@@ -27,7 +27,7 @@ test:
 
 ## Lint dbt SQL
 lint:
-	uv run sqlfluff lint models
+	uv run sqlfluff lint models tests
 
 ## Source freshness. Expected to warn/error on static synthetic data (it ends 2026-10-31).
 freshness:

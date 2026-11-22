@@ -1,0 +1,15 @@
+version: 2
+
+sources:
+  - name: ledgerly_truth
+    description: >
+      Ground truth written by the generator (data/truth/). Used ONLY by reconciliation tests in tests/.
+      No model may select from it, and it is never exposed to the agent.
+    config:
+      meta:
+        external_location: "data/truth/{name}.parquet"
+    tables:
+      - name: customer_month_facts
+        description: Facts per subscription × month end, before any business definition.
+      - name: mess_log
+        description: One row per injected data-quality issue.
