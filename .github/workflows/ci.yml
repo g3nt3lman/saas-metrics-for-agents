@@ -26,14 +26,16 @@ jobs:
       - name: dbt debug
         run: make debug
 
-      - name: dbt parse
-        run: uv run dbt parse
+      - name: dbt build (models + tests, incl. reconciliation with ground truth)
+        run: make build
+
+      - name: MetricFlow validate (semantic models + metrics)
+        run: uv run mf validate-configs
         env:
           DBT_PROFILES_DIR: ${{ github.workspace }}
 
       - name: Python tests
         run: make test
 
-      - name: Lint SQL (non-blocking until models exist)
+      - name: Lint SQL
         run: make lint
-        continue-on-error: true
