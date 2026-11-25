@@ -1,0 +1,118 @@
+# Eval set: raw text-to-SQL (baseline A) vs governed metrics over MCP (baseline B).
+#
+# Each question tests ONE trap. Write the question and the trap BEFORE looking at any agent answer.
+# Ground truth comes from the gold mart fct_mrr_monthly. It is trusted because dbt build reconciles the
+# MRR logic with the generator's ground truth (tests/assert_subscription_months_match_truth.sql, local currency).
+# Agents are graded on the final number, not on their SQL.
+#
+# Fields:
+#   id           stable id, never reused
+#   question     asked verbatim, identical in A and B, fresh session per question
+#   trap         one sentence: what a naive answer gets wrong
+#   expected     "value" (a number or a breakdown) or "refusal" (the metric is not in the semantic layer)
+#   truth_sql    query against warehouse.duckdb (gold layer)
+#   truth_value  number, or a map for breakdowns
+#   unit         e.g. EUR, customers
+#   tolerance    relative, e.g. 0.005 = 0.5% (FX and rounding)
+#   notes        anything that affects the truth
+#
+# Data ends on 2026-10-31. Every question is pinned to a date: "now" is ambiguous and has no single truth.
+
+questions:
+  - id: q1
+    question: "What was our MRR at the end of Q2 2026?"
+    trap: "Semi-additivity: MRR is a snapshot, so the answer is June 2026, not the sum of April-June."
+    expected: value
+    truth_sql: |
+      select sum(mrr_eur)
+      from fct_mrr_monthly
+      where month_start = '2026-06-01'
+    truth_value: 144230.73
+    unit: EUR
+    tolerance: 0.005
+    notes: >
+      June 2026 snapshot. The mart already excludes internal accounts; trials and ended = 0;
+      past_due and canceled_pending_end count. Summing April-June gives 419925.82 (~2.9x), the typical wrong answer.
+
+  - id: q2
+    question: "What was our ARR broken down by plan tier at the end of October 2026?"
+    trap: "Annual plans: the invoice amount is a year of revenue; MRR = amount / 12, ARR = MRR x 12."
+    expected: value
+    truth_sql: |
+      select p.tier, sum(f.mrr_eur) * 12 as arr_eur
+      from fct_mrr_monthly f
+      join dim_plans p using (plan_id)
+      where f.month_start = '2026-10-01'
+      group by 1
+    truth_value:
+      business: 1255625.77
+      pro: 435062.74
+      starter: 117456.73
+    unit: EUR
+    tolerance: 0.005
+    notes: >
+      Total ARR 1808145.24. Tier is the customer's primary plan that month (fct grain is customer x month);
+      a customer with two subscriptions in one month is attributed to one tier.
+
+  - id: q3
+    question: "How much MRR was at risk because of failed payments at the end of October 2026?"
+    trap: "Dunning: past_due subscriptions still count towards MRR; a failed payment is not churn."
+    expected: value
+    truth_sql: |
+      select sum(mrr_at_risk_eur)
+      from fct_mrr_monthly
+      where month_start = '2026-10-01'
+    truth_value: 1470.39
+    unit: EUR
+    tolerance: 0.005
+    notes: "MRR of subscriptions in dunning (failed payment not yet recovered) at month end. It is part of MRR, not removed from it."
+
+  - id: q4
+    question: "What was the MRR from customers billed in PLN in October 2026, expressed in EUR?"
+    trap: "FX: convert at the month-end rate (our definition), not today's rate or the invoice-date rate."
+    expected: value
+    truth_sql: |
+      select sum(mrr_eur)
+      from fct_mrr_monthly
+      where month_start = '2026-10-01'
+        and currency = 'PLN'
+    truth_value: 30718.88
+    unit: EUR
+    tolerance: 0.005
+    notes: "129128.42 PLN at the last business-day rate of October 2026 (0.237894 EUR per PLN)."
+
+  - id: q5
+    question: "How many paying customers did we have in September 2026?"
+    trap: "Trials (MRR = 0) and internal customers must not be counted."
+    expected: value
+    truth_sql: |
+      select count(*) filter (where is_paying)
+      from fct_mrr_monthly
+      where month_start = '2026-09-01'
+    truth_value: 843
+    unit: customers
+    tolerance: 0
+    notes: "Paying = MRR > 0 at month end (past_due counts). Matches the active_customers metric."
+
+  - id: q6
+    question: "How much MRR did we give away in discounts in October 2026?"
+    trap: "Net vs gross: MRR is net of discounts; the discount is gross MRR minus net MRR."
+    expected: value
+    truth_sql: |
+      select sum(discount_eur)
+      from fct_mrr_monthly
+      where month_start = '2026-10-01'
+    truth_value: 522.60
+    unit: EUR
+    tolerance: 0.005
+    notes: "Monthly coupon run-rate, not the total of discount lines on October invoices (annual coupons are spread / 12)."
+
+  - id: q7
+    question: "What was our net revenue retention for the January 2025 cohort after 12 months?"
+    trap: "Out of scope: NDR is not in the semantic layer. B is correct only if it says so instead of improvising."
+    expected: refusal
+    truth_sql: null
+    truth_value: null
+    unit: null
+    tolerance: null
+    notes: "A will likely compute something; grade A as wrong unless it states its definition and the number is defensible."
