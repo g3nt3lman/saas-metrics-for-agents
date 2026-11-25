@@ -9,6 +9,7 @@ dependencies = [
     "dbt-metricflow[duckdb]>=0.15.0",
     "duckdb>=2.0.0",
     "faker>=40.54.0",
+    "mcp>=2.3.0,<3",
     "numpy>=2.4.6",
     "pandas>=3.1.1",
     "pyarrow>=26.0.1",
@@ -19,8 +20,8 @@ dependencies = [
 package = false
 
 [tool.pytest.ini_options]
-testpaths = ["generator/tests"]
-pythonpath = ["generator"]
+testpaths = ["generator/tests", "agent/tests"]
+pythonpath = ["generator", "agent"]
 
 [dependency-groups]
 dev = [

@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 export DBT_PROFILES_DIR := $(CURDIR)
 
-.PHONY: setup debug generate build test lint freshness docs clean
+.PHONY: setup debug generate build test lint freshness docs serve clean
 
 ## Install Python deps (uv) and dbt packages
 setup:
@@ -21,9 +21,13 @@ build:
 	@test -f data/raw/events.parquet || $(MAKE) generate
 	uv run dbt build
 
-## Python tests (generator; later the MCP server)
+## Python tests (generator + MCP server; the MCP tests need `make build` first)
 test:
 	uv run pytest
+
+## MCP server for the agent (stdio, read-only). Stop it before `make build`: DuckDB allows one writer.
+serve:
+	uv run python agent/server.py
 
 ## Lint dbt SQL
 lint:

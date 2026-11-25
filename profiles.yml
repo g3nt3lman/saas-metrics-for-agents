@@ -1,5 +1,6 @@
 ledgerly:
-  target: dev
+  # DBT_TARGET=agent is used by the MCP server (agent/server.py)
+  target: "{{ env_var('DBT_TARGET', 'dev') }}"
   outputs:
     dev:
       type: duckdb
@@ -7,4 +8,14 @@ ledgerly:
       threads: 4
       settings:
         # month boundaries are UTC; without this DuckDB truncates timestamptz in the machine's local zone
+        TimeZone: UTC
+    agent:
+      # read-only at the database level: the agent cannot write, whatever SQL MetricFlow is asked to run.
+      # DuckDB allows one writer OR many readers per file, so stop the server before `make build`.
+      type: duckdb
+      path: "{{ env_var('DUCKDB_PATH', 'warehouse.duckdb') }}"
+      threads: 1
+      config_options:
+        access_mode: READ_ONLY
+      settings:
         TimeZone: UTC
